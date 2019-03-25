@@ -1,0 +1,159 @@
+1、用一句自己的话总结学过的设计模式（要精准）
+
+设计模式		一句话归纳								举例
+
+工厂模式（Factory）	只对结果负责，封装创建过程						BeabFactory、Calender
+
+单例模式（Singleton）	唯一对象								ApplicationContext、Calender
+
+原型模式（Prototype）	clone原对象，创建新对象							ArrayList、PrototypeBean
+
+代理模式（Proxy）	给出自己需求，找人办事，增强职责					ProxyFactoryBean、JdkDynamicAopProxy、CglibAopProxy
+
+委派模式（Delegate）	只做任务分发，最终只要完成任务的结果					DispatcherServlet、BeanDefinitionParserDelegate
+
+策略模式（Strategy）    定义多种算法，用户选择其一，但结果统一					InstantiationStrategy
+
+模板模式（Template）	定制执行流程标准化，自己实现定制中细节处理部分				JdbcTemplate、HttpServlet
+
+适配器模式（Adapter）	兼容/转换头，使原有功能和第三方功能都能在特定的环境下实现同一功能	AdvisorAdapter、HandlerAdapter
+
+装饰器模式（Decorator）	包装，同宗同源，增强职责						OutputStream、HttpHeadResponseDecorator
+
+观察者模式（Observer）	定义对象间的一种一对多的依赖关系，当一个对象的状态发生改变时，		ContextLoaderListener
+			所有依赖于它的对象都得到通知并被自动更新。
+
+2、列举SpringAOP、IOC、DI应用的代码片段。
+SpringAop的代码，利用cglib增强
+    @Override
+    public Object getProxy(@Nullable ClassLoader classLoader) {
+        if (logger.isTraceEnabled()) {
+            logger.trace("Creating CGLIB proxy: " + this.advised.getTargetSource());
+        }
+
+        try {
+            Class<?> rootClass = this.advised.getTargetClass();
+            Assert.state(rootClass != null, "Target class must be available for creating a CGLIB proxy");
+
+            Class<?> proxySuperClass = rootClass;
+            if (ClassUtils.isCglibProxyClass(rootClass)) {
+                proxySuperClass = rootClass.getSuperclass();
+                Class<?>[] additionalInterfaces = rootClass.getInterfaces();
+                for (Class<?> additionalInterface : additionalInterfaces) {
+                    this.advised.addInterface(additionalInterface);
+                }
+            }
+
+            // Validate the class, writing log messages as necessary.
+            validateClassIfNecessary(proxySuperClass, classLoader);
+
+            // Configure CGLIB Enhancer...
+            Enhancer enhancer = createEnhancer();
+            if (classLoader != null) {
+                enhancer.setClassLoader(classLoader);
+                if (classLoader instanceof SmartClassLoader &&
+                        ((SmartClassLoader) classLoader).isClassReloadable(proxySuperClass)) {
+                    enhancer.setUseCache(false);
+                }
+            }
+            enhancer.setSuperclass(proxySuperClass);
+            enhancer.setInterfaces(AopProxyUtils.completeProxiedInterfaces(this.advised));
+            enhancer.setNamingPolicy(SpringNamingPolicy.INSTANCE);
+            enhancer.setStrategy(new ClassLoaderAwareUndeclaredThrowableStrategy(classLoader));
+
+            Callback[] callbacks = getCallbacks(rootClass);
+            Class<?>[] types = new Class<?>[callbacks.length];
+            for (int x = 0; x < types.length; x++) {
+                types[x] = callbacks[x].getClass();
+            }
+            // fixedInterceptorMap only populated at this point, after getCallbacks call above
+            enhancer.setCallbackFilter(new ProxyCallbackFilter(
+                    this.advised.getConfigurationOnlyCopy(), this.fixedInterceptorMap, this.fixedInterceptorOffset));
+            enhancer.setCallbackTypes(types);
+
+            // Generate the proxy class and create a proxy instance.
+            return createProxyClassAndInstance(enhancer, callbacks);
+        }
+        catch (CodeGenerationException | IllegalArgumentException ex) {
+            throw new AopConfigException("Could not generate CGLIB subclass of " + this.advised.getTargetClass() +
+                    ": Common causes of this problem include using a final class or a non-visible class",
+                    ex);
+        }
+        catch (Throwable ex) {
+            // TargetSource.getTarget() failed
+            throw new AopConfigException("Unexpected AOP exception", ex);
+        }
+    }
+
+IOC代码——Spring的spring-context
+    public Object getBean(String name) throws BeansException {
+        this.assertBeanFactoryActive();
+        return this.getBeanFactory().getBean(name);
+    }
+
+    public <T> T getBean(String name, @Nullable Class<T> requiredType) throws BeansException {
+        this.assertBeanFactoryActive();
+        return this.getBeanFactory().getBean(name, requiredType);
+    }
+
+    public Object getBean(String name, Object... args) throws BeansException {
+        this.assertBeanFactoryActive();
+        return this.getBeanFactory().getBean(name, args);
+    }
+
+    public <T> T getBean(Class<T> requiredType) throws BeansException {
+        this.assertBeanFactoryActive();
+        return this.getBeanFactory().getBean(requiredType);
+    }
+
+    public <T> T getBean(Class<T> requiredType, Object... args) throws BeansException {
+        this.assertBeanFactoryActive();
+        return this.getBeanFactory().getBean(requiredType, args);
+    }
+
+DI代码——Spring框架中的spring-beans 拷贝Bean的属性复制
+    public abstract class AnnotationBeanUtils {
+    
+    	/**
+    	 * Copy the properties of the supplied {@link Annotation} to the supplied target bean.
+    	 * Any properties defined in {@code excludedProperties} will not be copied.
+    	 * @param ann the annotation to copy from
+    	 * @param bean the bean instance to copy to
+    	 * @param excludedProperties the names of excluded properties, if any
+    	 * @see org.springframework.beans.BeanWrapper
+    	 */
+    	public static void copyPropertiesToBean(Annotation ann, Object bean, String... excludedProperties) {
+    		copyPropertiesToBean(ann, bean, null, excludedProperties);
+    	}
+    
+    	/**
+    	 * Copy the properties of the supplied {@link Annotation} to the supplied target bean.
+    	 * Any properties defined in {@code excludedProperties} will not be copied.
+    	 * <p>A specified value resolver may resolve placeholders in property values, for example.
+    	 * @param ann the annotation to copy from
+    	 * @param bean the bean instance to copy to
+    	 * @param valueResolver a resolve to post-process String property values (may be {@code null})
+    	 * @param excludedProperties the names of excluded properties, if any
+    	 * @see org.springframework.beans.BeanWrapper
+    	 */
+    	public static void copyPropertiesToBean(Annotation ann, Object bean, @Nullable StringValueResolver valueResolver,
+    			String... excludedProperties) {
+    
+    		Set<String> excluded = new HashSet<>(Arrays.asList(excludedProperties));
+    		Method[] annotationProperties = ann.annotationType().getDeclaredMethods();
+    		BeanWrapper bw = PropertyAccessorFactory.forBeanPropertyAccess(bean);
+    		for (Method annotationProperty : annotationProperties) {
+    			String propertyName = annotationProperty.getName();
+    			if (!excluded.contains(propertyName) && bw.isWritableProperty(propertyName)) {
+    				Object value = ReflectionUtils.invokeMethod(annotationProperty, ann);
+    				if (valueResolver != null && value instanceof String) {
+    					value = valueResolver.resolveStringValue((String) value);
+    				}
+    				bw.setPropertyValue(propertyName, value);
+    			}
+    		}
+    	}
+    
+    }
+
+
